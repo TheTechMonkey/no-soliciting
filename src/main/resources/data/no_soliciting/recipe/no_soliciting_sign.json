@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "#minecraft:signs",
+    "minecraft:red_dye"
+  ],
+  "result": {
+    "id": "no_soliciting:no_soliciting_sign",
+    "count": 1
+  }
+}
+

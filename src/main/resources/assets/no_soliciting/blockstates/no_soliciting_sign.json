@@ -1,0 +1,9 @@
+{
+  "variants": {
+    "facing=north": { "model": "no_soliciting:block/no_soliciting_sign" },
+    "facing=east":  { "model": "no_soliciting:block/no_soliciting_sign", "y": 90 },
+    "facing=south": { "model": "no_soliciting:block/no_soliciting_sign", "y": 180 },
+    "facing=west":  { "model": "no_soliciting:block/no_soliciting_sign", "y": 270 }
+  }
+}
+

@@ -1,0 +1,13 @@
+{
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "rewards": {
+    "recipes": [
+      "no_soliciting:no_soliciting_sign"
+    ]
+  }
+}
+

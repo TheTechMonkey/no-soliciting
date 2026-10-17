@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "no_soliciting",
+  "version": "${version}",
+  "name": "No Soliciting",
+  "description": "Keeps wandering traders and their trader llamas out of protected areas.",
+  "authors": [
+    "TechMonkey"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.techmonkey.no_soliciting.NoSoliciting"
+    ],
+    "client": [
+      "com.techmonkey.no_soliciting.client.NoSolicitingClient"
+    ]
+  },
+  "mixins": [
+    "no_soliciting.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "fabric-api": ">=0.161.0+26.3",
+    "minecraft": "~26.3",
+    "java": ">=25"
+  }
+}
+
