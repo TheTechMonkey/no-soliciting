@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -92,28 +93,29 @@ public final class BoundaryRenderer {
         List<ContourSegment> segments = new ArrayList<>((radius * 2 + 1) * 4);
 
         for (int x = minX; x <= maxX; x++) {
-            int y = Math.max(terrainY(level, x, minZ), terrainY(level, x, minZ - 1));
+            int y = Math.max(boundaryY(level, x, minZ), boundaryY(level, x, minZ - 1));
             segments.add(new ContourSegment(x, minZ, x + 1, minZ, y));
         }
         for (int z = minZ; z <= maxZ; z++) {
-            int y = Math.max(terrainY(level, maxX, z), terrainY(level, maxX + 1, z));
+            int y = Math.max(boundaryY(level, maxX, z), boundaryY(level, maxX + 1, z));
             segments.add(new ContourSegment(maxX + 1, z, maxX + 1, z + 1, y));
         }
         for (int x = maxX; x >= minX; x--) {
-            int y = Math.max(terrainY(level, x, maxZ), terrainY(level, x, maxZ + 1));
+            int y = Math.max(boundaryY(level, x, maxZ), boundaryY(level, x, maxZ + 1));
             segments.add(new ContourSegment(x + 1, maxZ + 1, x, maxZ + 1, y));
         }
         for (int z = maxZ; z >= minZ; z--) {
-            int y = Math.max(terrainY(level, minX, z), terrainY(level, minX - 1, z));
+            int y = Math.max(boundaryY(level, minX, z), boundaryY(level, minX - 1, z));
             segments.add(new ContourSegment(minX, z + 1, minX, z, y));
         }
 
         return segments;
     }
 
-    private static int terrainY(ClientLevel level, int x, int z) {
+    private static int boundaryY(ClientLevel level, int x, int z) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         int startingY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+        int terrainY = level.getMinY();
 
         for (int y = startingY; level.isInsideBuildHeight(y); y--) {
             pos.set(x, y, z);
@@ -122,11 +124,20 @@ public final class BoundaryRenderer {
                 continue;
             }
             if (Block.isShapeFullBlock(state.getCollisionShape(level, pos))) {
+                terrainY = y + 1;
+                break;
+            }
+        }
+
+        int worldSurface = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+        for (int y = worldSurface - 1; y >= terrainY; y--) {
+            pos.set(x, y, z);
+            if (level.getFluidState(pos).is(FluidTags.WATER)) {
                 return y + 1;
             }
         }
 
-        return level.getMinY();
+        return terrainY;
     }
 
     public static void render(LevelRenderContext context) {
