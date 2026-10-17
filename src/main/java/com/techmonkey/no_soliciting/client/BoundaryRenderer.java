@@ -44,7 +44,7 @@ public final class BoundaryRenderer {
     }
 
     private static void buildBoundary(ClientLevel level, BlockPos center, int radius) {
-        List<ContourSegment> segments = perimeter(level, center, radius);
+        List<ContourSegment> segments = mergeFlatRuns(perimeter(level, center, radius));
         int originX = center.getX() - radius;
         int originZ = center.getZ() - radius;
         int originY = segments.stream().mapToInt(ContourSegment::y).min().orElse(center.getY());
@@ -83,6 +83,31 @@ public final class BoundaryRenderer {
 
         boundary = Shapes.or(pieces.getFirst(), pieces.subList(1, pieces.size()).toArray(VoxelShape[]::new));
         boundaryOrigin = new Vec3(originX, originY, originZ);
+    }
+
+    private static List<ContourSegment> mergeFlatRuns(List<ContourSegment> segments) {
+        List<ContourSegment> merged = new ArrayList<>();
+        ContourSegment run = segments.getFirst();
+
+        for (int index = 1; index < segments.size(); index++) {
+            ContourSegment next = segments.get(index);
+            int runXDirection = Integer.signum(run.x2 - run.x1);
+            int runZDirection = Integer.signum(run.z2 - run.z1);
+            int nextXDirection = Integer.signum(next.x2 - next.x1);
+            int nextZDirection = Integer.signum(next.z2 - next.z1);
+            boolean connected = run.x2 == next.x1 && run.z2 == next.z1;
+            boolean sameDirection = runXDirection == nextXDirection && runZDirection == nextZDirection;
+
+            if (connected && sameDirection && run.y == next.y) {
+                run = new ContourSegment(run.x1, run.z1, next.x2, next.z2, run.y);
+            } else {
+                merged.add(run);
+                run = next;
+            }
+        }
+
+        merged.add(run);
+        return merged;
     }
 
     private static List<ContourSegment> perimeter(ClientLevel level, BlockPos center, int radius) {
