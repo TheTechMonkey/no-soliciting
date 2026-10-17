@@ -4,6 +4,7 @@
   "version": "${version}",
   "name": "No Soliciting",
   "description": "Keeps wandering traders and their trader llamas out of protected areas.",
+  "icon": "assets/no_soliciting/icon.png",
   "authors": [
     "TechMonkey"
   ],
