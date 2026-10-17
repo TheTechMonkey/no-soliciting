@@ -1,7 +1,6 @@
 package com.techmonkey.no_soliciting.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -12,6 +11,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,12 +20,12 @@ import java.util.List;
 public final class BoundaryRenderer {
     private static final long DISPLAY_TICKS = 20L * 60L;
     private static final int COLOR = 0xD9FF3030;
-    private static final float LINE_WIDTH = 4.0F;
+    private static final double SHAPE_THICKNESS = 0.001;
     private static final double SURFACE_OFFSET = 0.055;
 
     private static BlockPos center;
     private static long hideAtGameTime;
-    private static List<BoundaryLine> boundaryLines;
+    private static VoxelShape boundary;
     private static Vec3 boundaryOrigin;
 
     private BoundaryRenderer() {
@@ -46,31 +47,40 @@ public final class BoundaryRenderer {
         int originX = center.getX() - radius;
         int originZ = center.getZ() - radius;
         int originY = segments.stream().mapToInt(ContourSegment::y).min().orElse(center.getY());
-        List<BoundaryLine> lines = new ArrayList<>(segments.size() * 2);
+        List<VoxelShape> pieces = new ArrayList<>(segments.size() * 2);
 
         for (int index = 0; index < segments.size(); index++) {
             ContourSegment current = segments.get(index);
             ContourSegment next = segments.get((index + 1) % segments.size());
-            double y = current.y - originY + SURFACE_OFFSET;
+            double x1 = current.x1 - originX;
+            double z1 = current.z1 - originZ;
+            double x2 = current.x2 - originX;
+            double z2 = current.z2 - originZ;
+            double y1 = current.y - originY + SURFACE_OFFSET;
+            double y2 = next.y - originY + SURFACE_OFFSET;
 
-            lines.add(new BoundaryLine(
-                    new Vec3(current.x1 - originX, y, current.z1 - originZ),
-                    new Vec3(current.x2 - originX, y, current.z2 - originZ)
+            pieces.add(Shapes.box(
+                    Math.min(x1, x2) - SHAPE_THICKNESS,
+                    y1,
+                    Math.min(z1, z2) - SHAPE_THICKNESS,
+                    Math.max(x1, x2) + SHAPE_THICKNESS,
+                    y1 + SHAPE_THICKNESS,
+                    Math.max(z1, z2) + SHAPE_THICKNESS
             ));
 
             if (current.y != next.y) {
-                lines.add(new BoundaryLine(
-                        new Vec3(current.x2 - originX, y, current.z2 - originZ),
-                        new Vec3(
-                                current.x2 - originX,
-                                next.y - originY + SURFACE_OFFSET,
-                                current.z2 - originZ
-                        )
+                pieces.add(Shapes.box(
+                        x2 - SHAPE_THICKNESS,
+                        Math.min(y1, y2),
+                        z2 - SHAPE_THICKNESS,
+                        x2 + SHAPE_THICKNESS,
+                        Math.max(y1, y2) + SHAPE_THICKNESS,
+                        z2 + SHAPE_THICKNESS
                 ));
             }
         }
 
-        boundaryLines = List.copyOf(lines);
+        boundary = Shapes.or(pieces.getFirst(), pieces.subList(1, pieces.size()).toArray(VoxelShape[]::new));
         boundaryOrigin = new Vec3(originX, originY, originZ);
     }
 
@@ -82,16 +92,20 @@ public final class BoundaryRenderer {
         List<ContourSegment> segments = new ArrayList<>((radius * 2 + 1) * 4);
 
         for (int x = minX; x <= maxX; x++) {
-            segments.add(new ContourSegment(x, minZ, x + 1, minZ, terrainY(level, x, minZ)));
+            int y = Math.max(terrainY(level, x, minZ), terrainY(level, x, minZ - 1));
+            segments.add(new ContourSegment(x, minZ, x + 1, minZ, y));
         }
         for (int z = minZ; z <= maxZ; z++) {
-            segments.add(new ContourSegment(maxX + 1, z, maxX + 1, z + 1, terrainY(level, maxX, z)));
+            int y = Math.max(terrainY(level, maxX, z), terrainY(level, maxX + 1, z));
+            segments.add(new ContourSegment(maxX + 1, z, maxX + 1, z + 1, y));
         }
         for (int x = maxX; x >= minX; x--) {
-            segments.add(new ContourSegment(x + 1, maxZ + 1, x, maxZ + 1, terrainY(level, x, maxZ)));
+            int y = Math.max(terrainY(level, x, maxZ), terrainY(level, x, maxZ + 1));
+            segments.add(new ContourSegment(x + 1, maxZ + 1, x, maxZ + 1, y));
         }
         for (int z = maxZ; z >= minZ; z--) {
-            segments.add(new ContourSegment(minX, z + 1, minX, z, terrainY(level, minX, z)));
+            int y = Math.max(terrainY(level, minX, z), terrainY(level, minX - 1, z));
+            segments.add(new ContourSegment(minX, z + 1, minX, z, y));
         }
 
         return segments;
@@ -118,12 +132,12 @@ public final class BoundaryRenderer {
     public static void render(LevelRenderContext context) {
         Minecraft minecraft = Minecraft.getInstance();
         if (center == null
-                || boundaryLines == null
+                || boundary == null
                 || boundaryOrigin == null
                 || minecraft.level == null
                 || minecraft.level.getGameTime() >= hideAtGameTime) {
             center = null;
-            boundaryLines = null;
+            boundary = null;
             boundaryOrigin = null;
             return;
         }
@@ -136,35 +150,17 @@ public final class BoundaryRenderer {
                 boundaryOrigin.y - camera.y,
                 boundaryOrigin.z - camera.z
         );
-        context.submitNodeCollector().submitCustomGeometry(
+        context.submitNodeCollector().submitShapeOutline(
                 pose,
+                boundary,
                 RenderTypes.linesTranslucentNoDepthWrite(),
-                (entry, consumer) -> renderLines(entry, consumer)
+                COLOR,
+                4.0F,
+                true
         );
         pose.popPose();
     }
 
-    private static void renderLines(PoseStack.Pose pose, VertexConsumer consumer) {
-        for (BoundaryLine line : boundaryLines) {
-            Vec3 direction = line.to.subtract(line.from).normalize();
-            float normalX = (float) direction.x;
-            float normalY = (float) direction.y;
-            float normalZ = (float) direction.z;
-
-            consumer.addVertex(pose, (float) line.from.x, (float) line.from.y, (float) line.from.z)
-                    .setColor(COLOR)
-                    .setNormal(pose, normalX, normalY, normalZ)
-                    .setLineWidth(LINE_WIDTH);
-            consumer.addVertex(pose, (float) line.to.x, (float) line.to.y, (float) line.to.z)
-                    .setColor(COLOR)
-                    .setNormal(pose, normalX, normalY, normalZ)
-                    .setLineWidth(LINE_WIDTH);
-        }
-    }
-
     private record ContourSegment(int x1, int z1, int x2, int z2, int y) {
-    }
-
-    private record BoundaryLine(Vec3 from, Vec3 to) {
     }
 }
